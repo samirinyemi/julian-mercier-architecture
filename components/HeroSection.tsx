@@ -203,13 +203,19 @@ export function HeroSection() {
   }, [expanded]);
 
   // Auto-fit the title so it spans the full hero width edge-to-edge inside
-  // its 16px-padded card. Uses scrollWidth at a 100px baseline to compute
-  // the exact font-size that fills the container, then applies it. Re-runs
-  // on resize via ResizeObserver so it stays full-width across breakpoints.
+  // its 16px-padded card. We can't use the H1's own scrollWidth here — the
+  // inner overflow-hidden span is `display: block` (so the slide-up reveal
+  // can clip letters), which means it always reports the container's width,
+  // not the text's natural width. Instead we measure each `.hero-letter`
+  // span individually and sum them: that's the true rendered text width.
+  // Then we scale font-size by target / natural so the line fills exactly.
+  // Re-runs on resize via ResizeObserver and after web fonts load.
   useEffect(() => {
     const wrapper = titleWrapperRef.current;
     const title = titleRef.current;
     if (!wrapper || !title) return;
+
+    const BASELINE = 200;
 
     const fit = () => {
       const cs = getComputedStyle(wrapper);
@@ -217,11 +223,26 @@ export function HeroSection() {
         parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
       const target = wrapper.clientWidth - padX;
       if (target <= 0) return;
-      // Baseline measurement at a known size.
-      title.style.fontSize = "100px";
-      const natural = title.scrollWidth;
-      if (natural === 0) return;
-      title.style.fontSize = `${(100 * target) / natural}px`;
+
+      // Reset to a known baseline so widths scale linearly.
+      title.style.fontSize = `${BASELINE}px`;
+
+      // Measure first letter's left edge to last letter's right edge — this
+      // captures the full rendered run *including* any letter-spacing gaps
+      // between adjacent inline-block letters (which summing offsetWidth
+      // would miss). getBoundingClientRect for sub-pixel accuracy.
+      const letters = title.querySelectorAll<HTMLElement>(".hero-letter");
+      if (!letters.length) return;
+      const first = letters[0].getBoundingClientRect();
+      const last = letters[letters.length - 1].getBoundingClientRect();
+      const natural = last.right - first.left;
+      if (natural <= 0) return;
+
+      // Slight scale-down to guarantee no edge clipping (sub-pixel rounding
+      // in some browsers can otherwise push the last char a hair past the
+      // padding line).
+      const safety = 0.995;
+      title.style.fontSize = `${(BASELINE * target * safety) / natural}px`;
     };
 
     fit();
