@@ -271,12 +271,14 @@ export function HeroSection() {
 
       // Letter-by-letter slide-up. Each character animates from yPercent:115
       // (just below its overflow-hidden parent) up to 0 with a small stagger.
-      // Total reveal lands at ~base+stagger*chars ≈ 1.0 + 0.035*12 ≈ 1.42s,
-      // which is only slightly longer than the previous block reveal (1.1s).
+      // Position -0.25 starts the run a quarter-second before the timeline's
+      // base anchor — i.e. 0.5s earlier than the previous +0.25 placement —
+      // so the title doesn't feel like it's lagging behind the rest of the
+      // hero entrance.
       tl.from(
         ".hero-letter",
         { yPercent: 115, duration: 1.0, stagger: 0.035, ease: EASE.expo },
-        0.25
+        -0.25
       );
 
       tl.from(
@@ -457,7 +459,7 @@ export function HeroSection() {
             className="font-bold leading-[0.9] tracking-[-0.045em] uppercase text-linen whitespace-nowrap"
             aria-label="Amara Villa."
           >
-            <span className="overflow-hidden block pb-[0.06em]">
+            <span className="overflow-hidden block">
               {TITLE_CHARS.map((ch, i) => (
                 <span
                   key={i}
