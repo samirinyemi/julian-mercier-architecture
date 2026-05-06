@@ -14,10 +14,15 @@ import { HeroColumnReveal } from "@/components/HeroColumnReveal";
  * where the same MP4 plays end-to-end with native controls. Closes on X,
  * backdrop tap, or Escape.
  */
-// Title characters — split for letter-by-letter stagger. Spaces are
-// kept as non-breaking so inline-block spans render with width.
-const TITLE = "AMARA VILLA.";
-const TITLE_CHARS = [...TITLE];
+// Title characters — split for letter-by-letter stagger. Spaces kept as
+// non-breaking so inline-block spans render with width.
+//
+// Desktop renders all 12 chars on one line; mobile breaks into two lines
+// (AMARA / VILLA.) so each can independently scale to fill the smaller
+// viewport. The two halves get their own auto-fit (different font-sizes).
+const TITLE_CHARS = [..."AMARA VILLA."];
+const TITLE_LINE_1_CHARS = [..."AMARA"];
+const TITLE_LINE_2_CHARS = [..."VILLA."];
 
 export function HeroSection() {
   const root = useRef<HTMLElement>(null);
@@ -27,6 +32,9 @@ export function HeroSection() {
   const desktopVideoRef = useRef<HTMLButtonElement>(null);
   const titleWrapperRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const lineDesktopRef = useRef<HTMLSpanElement>(null);
+  const lineMobile1Ref = useRef<HTMLSpanElement>(null);
+  const lineMobile2Ref = useRef<HTMLSpanElement>(null);
   const [expanded, setExpanded] = useState(false);
 
   const LOOP_END_SEC = 3.0;
@@ -202,20 +210,39 @@ export function HeroSection() {
     }
   }, [expanded]);
 
-  // Auto-fit the title so it spans the full hero width edge-to-edge inside
-  // its 16px-padded card. We can't use the H1's own scrollWidth here — the
-  // inner overflow-hidden span is `display: block` (so the slide-up reveal
-  // can clip letters), which means it always reports the container's width,
-  // not the text's natural width. Instead we measure each `.hero-letter`
-  // span individually and sum them: that's the true rendered text width.
-  // Then we scale font-size by target / natural so the line fills exactly.
-  // Re-runs on resize via ResizeObserver and after web fonts load.
+  // Auto-fit each visible title line to span the full hero width edge-to-edge
+  // inside its 16px-padded card.
+  //
+  // We can't measure the H1's scrollWidth — the inner overflow-hidden spans
+  // are display:block (so the slide-up reveal clips letters), which means
+  // their scrollWidth always equals their parent's width. Instead we walk
+  // each line ref's `.hero-letter` children and measure first letter's left
+  // edge to last letter's right edge via getBoundingClientRect. That's the
+  // real rendered run including any letter-spacing between inline-blocks.
+  //
+  // We then scale that line's own font-size to fill `target`. Each line is
+  // sized independently, so on mobile the AMARA and VILLA. lines (different
+  // char counts) each fill the width with their own font-size.
   useEffect(() => {
     const wrapper = titleWrapperRef.current;
-    const title = titleRef.current;
-    if (!wrapper || !title) return;
+    if (!wrapper) return;
 
     const BASELINE = 200;
+    const SAFETY = 0.995; // tiny scale-down to avoid sub-pixel edge clip
+
+    const fitLine = (line: HTMLSpanElement | null, target: number) => {
+      if (!line) return;
+      // Hidden lines (display:none from responsive class) have offsetWidth 0.
+      if (line.offsetWidth === 0) return;
+      line.style.fontSize = `${BASELINE}px`;
+      const letters = line.querySelectorAll<HTMLElement>(".hero-letter");
+      if (!letters.length) return;
+      const first = letters[0].getBoundingClientRect();
+      const last = letters[letters.length - 1].getBoundingClientRect();
+      const natural = last.right - first.left;
+      if (natural <= 0) return;
+      line.style.fontSize = `${(BASELINE * target * SAFETY) / natural}px`;
+    };
 
     const fit = () => {
       const cs = getComputedStyle(wrapper);
@@ -223,26 +250,9 @@ export function HeroSection() {
         parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
       const target = wrapper.clientWidth - padX;
       if (target <= 0) return;
-
-      // Reset to a known baseline so widths scale linearly.
-      title.style.fontSize = `${BASELINE}px`;
-
-      // Measure first letter's left edge to last letter's right edge — this
-      // captures the full rendered run *including* any letter-spacing gaps
-      // between adjacent inline-block letters (which summing offsetWidth
-      // would miss). getBoundingClientRect for sub-pixel accuracy.
-      const letters = title.querySelectorAll<HTMLElement>(".hero-letter");
-      if (!letters.length) return;
-      const first = letters[0].getBoundingClientRect();
-      const last = letters[letters.length - 1].getBoundingClientRect();
-      const natural = last.right - first.left;
-      if (natural <= 0) return;
-
-      // Slight scale-down to guarantee no edge clipping (sub-pixel rounding
-      // in some browsers can otherwise push the last char a hair past the
-      // padding line).
-      const safety = 0.995;
-      title.style.fontSize = `${(BASELINE * target * safety) / natural}px`;
+      fitLine(lineDesktopRef.current, target);
+      fitLine(lineMobile1Ref.current, target);
+      fitLine(lineMobile2Ref.current, target);
     };
 
     fit();
@@ -271,15 +281,24 @@ export function HeroSection() {
 
       // Letter-by-letter slide-up. Each character animates from yPercent:115
       // (just below its overflow-hidden parent) up to 0 with a small stagger.
+      //
+      // We filter to *currently-visible* letters via offsetParent so the
+      // hidden variant (e.g. desktop letters on a mobile viewport) doesn't
+      // burn through stagger steps invisibly before the visible run begins.
       // Position -0.25 starts the run a quarter-second before the timeline's
-      // base anchor — i.e. 0.5s earlier than the previous +0.25 placement —
-      // so the title doesn't feel like it's lagging behind the rest of the
-      // hero entrance.
-      tl.from(
-        ".hero-letter",
-        { yPercent: 115, duration: 1.0, stagger: 0.035, ease: EASE.expo },
-        -0.25
+      // base anchor — 0.5s earlier than the previous +0.25 placement — so
+      // the title doesn't lag behind the rest of the hero entrance.
+      const allLetters = root.current?.querySelectorAll<HTMLElement>(".hero-letter");
+      const visibleLetters = Array.from(allLetters || []).filter(
+        (el) => el.offsetParent !== null
       );
+      if (visibleLetters.length) {
+        tl.from(
+          visibleLetters,
+          { yPercent: 115, duration: 1.0, stagger: 0.035, ease: EASE.expo },
+          -0.25
+        );
+      }
 
       tl.from(
         ".hero-tag-line",
@@ -456,17 +475,53 @@ export function HeroSection() {
         >
           <h1
             ref={titleRef}
-            className="font-bold leading-[0.9] tracking-[-0.045em] uppercase text-linen whitespace-nowrap"
+            className="font-bold leading-[0.9] tracking-[-0.045em] uppercase text-linen whitespace-nowrap text-left"
             aria-label="Amara Villa."
           >
-            <span className="overflow-hidden block">
+            {/* Desktop variant — single line, hidden below md */}
+            <span
+              ref={lineDesktopRef}
+              className="overflow-hidden hidden md:block mb-[-0.12em]"
+            >
               {TITLE_CHARS.map((ch, i) => (
                 <span
-                  key={i}
+                  key={`d${i}`}
                   aria-hidden
                   className="hero-letter inline-block will-change-transform"
                 >
                   {ch === " " ? " " : ch}
+                </span>
+              ))}
+            </span>
+
+            {/* Mobile variant line 1 — AMARA */}
+            <span
+              ref={lineMobile1Ref}
+              className="overflow-hidden block md:hidden"
+            >
+              {TITLE_LINE_1_CHARS.map((ch, i) => (
+                <span
+                  key={`m1${i}`}
+                  aria-hidden
+                  className="hero-letter inline-block will-change-transform"
+                >
+                  {ch}
+                </span>
+              ))}
+            </span>
+
+            {/* Mobile variant line 2 — VILLA. */}
+            <span
+              ref={lineMobile2Ref}
+              className="overflow-hidden block md:hidden mb-[-0.12em]"
+            >
+              {TITLE_LINE_2_CHARS.map((ch, i) => (
+                <span
+                  key={`m2${i}`}
+                  aria-hidden
+                  className="hero-letter inline-block will-change-transform"
+                >
+                  {ch}
                 </span>
               ))}
             </span>
