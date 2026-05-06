@@ -45,12 +45,8 @@ export function HeroSection() {
   }, []);
 
   // Custom "Play" cursor when hovering the desktop mini-video.
+  // Uses GSAP's quickTo for low-latency, smooth interpolation.
   // Skipped on touch / coarse pointer devices.
-  //
-  // Position is driven by a per-frame lerp on the GSAP ticker (which is
-  // already running for Lenis sync) rather than `quickTo` — the lerp factor
-  // (~0.32) gives a snappy, near-instant follow with just enough trailing
-  // weight to feel premium, no perceptible lag.
   useEffect(() => {
     const cursor = cursorRef.current;
     const trigger = desktopVideoRef.current;
@@ -60,37 +56,26 @@ export function HeroSection() {
 
     const { gsap } = getGsap();
 
-    // Center the cursor element on its own midpoint via xPercent/yPercent.
-    gsap.set(cursor, { xPercent: -50, yPercent: -50, scale: 0, opacity: 0 });
+    // Center the cursor on its own midpoint and start hidden.
+    gsap.set(cursor, { xPercent: -50, yPercent: -50, scale: 0.7, opacity: 0 });
+
+    // quickTo gives us snappy, premium follow with no manual ticker bookkeeping.
+    const xTo = gsap.quickTo(cursor, "x", { duration: 0.35, ease: "expo.out" });
+    const yTo = gsap.quickTo(cursor, "y", { duration: 0.35, ease: "expo.out" });
 
     let active = false;
-    let mouseX = 0;
-    let mouseY = 0;
-    let curX = 0;
-    let curY = 0;
-
-    const lerpFactor = 0.32; // higher = snappier follow, lower = more drag
-
-    const tick = () => {
-      // Skip work entirely when the cursor isn't visible.
-      if (!active && cursor.style.opacity === "0") return;
-      curX += (mouseX - curX) * lerpFactor;
-      curY += (mouseY - curY) * lerpFactor;
-      gsap.set(cursor, { x: curX, y: curY });
-    };
-    gsap.ticker.add(tick);
 
     const onEnter = (e: PointerEvent) => {
       active = true;
-      // Snap both targets and current to the actual pointer so the cursor
-      // appears exactly where the mouse is — no fly-in from elsewhere.
-      mouseX = curX = e.clientX;
-      mouseY = curY = e.clientY;
-      gsap.set(cursor, { x: curX, y: curY });
+      // Snap to current pointer (no animation) so the cursor appears exactly
+      // where the mouse is, then run the regular animated follow.
+      gsap.set(cursor, { x: e.clientX, y: e.clientY });
+      xTo(e.clientX);
+      yTo(e.clientY);
       gsap.to(cursor, {
         scale: 1,
         opacity: 1,
-        duration: 0.35,
+        duration: 0.3,
         ease: "expo.out",
         overwrite: "auto",
       });
@@ -109,18 +94,23 @@ export function HeroSection() {
 
     const onMove = (e: PointerEvent) => {
       if (!active) return;
-      mouseX = e.clientX;
-      mouseY = e.clientY;
+      xTo(e.clientX);
+      yTo(e.clientY);
     };
 
     trigger.addEventListener("pointerenter", onEnter);
     trigger.addEventListener("pointerleave", onLeave);
+    // Listen on the trigger itself so we always get pointermove events even
+    // when something else covers the cursor element.
+    trigger.addEventListener("pointermove", onMove, { passive: true });
+    // Also listen on window so the cursor keeps tracking if the pointer moves
+    // out of the trigger but onLeave hasn't fired yet (edge case on fast moves).
     window.addEventListener("pointermove", onMove, { passive: true });
 
     return () => {
-      gsap.ticker.remove(tick);
       trigger.removeEventListener("pointerenter", onEnter);
       trigger.removeEventListener("pointerleave", onLeave);
+      trigger.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointermove", onMove);
     };
   }, []);
@@ -220,8 +210,8 @@ export function HeroSection() {
       });
 
       tl.from(
-        ".hero-line",
-        { yPercent: 105, duration: 1.1, stagger: 0.12, ease: EASE.expo },
+        ".hero-marquee-card",
+        { yPercent: 100, opacity: 0, duration: 1.1, ease: EASE.expo },
         0.25
       );
 
@@ -293,7 +283,7 @@ export function HeroSection() {
           />
         </div>
 
-        <div className="absolute inset-0 flex flex-col justify-between text-linen px-4 sm:px-6 md:px-[clamp(2rem,3.2vw,3.5rem)] pb-[clamp(1.5rem,2vw,2rem)] pt-[clamp(5rem,8vw,9rem)]">
+        <div className="absolute inset-0 flex flex-col justify-between text-linen px-4 sm:px-6 md:px-[clamp(2rem,3.2vw,3.5rem)] pb-[clamp(7rem,11vw,11rem)] pt-[clamp(5rem,8vw,9rem)]">
           <div aria-hidden className="flex-shrink-0" />
 
           <div className="flex flex-col gap-[clamp(20px,4vw,56px)] mt-[clamp(16px,4vw,72px)] hero-fade">
@@ -343,7 +333,7 @@ export function HeroSection() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-4 hero-fade">
+          <div className="flex flex-col gap-5 hero-fade">
             {/* Mobile mini-video — small thumbnail, loops first 3s, tap to expand */}
             <button
               type="button"
@@ -376,25 +366,43 @@ export function HeroSection() {
               </div>
             </button>
 
-            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
-              <h1 className="font-bold leading-[1.02] tracking-[-0.04em] text-[clamp(4rem,14.5vw,12.5rem)]">
-                <span className="overflow-hidden block pb-[0.04em]">
-                  <span className="hero-line block">Amara</span>
-                </span>
-                <span className="overflow-hidden block pb-[0.04em]">
-                  <span className="hero-line block">Villa.</span>
-                </span>
-              </h1>
-
-              <div className="flex flex-row items-center gap-3 mb-2 md:mb-6 shrink-0">
-                <CTA href="/projects" variant="linen" className="hero-cta">
-                  View projects
-                </CTA>
-                <CTA href="/contact" variant="outline-linen" className="hero-cta">
-                  Let&apos;s chat
-                </CTA>
-              </div>
+            {/* CTA row — sits above the marquee card with breathing room */}
+            <div className="flex flex-row items-center gap-3 self-end md:self-end">
+              <CTA href="/projects" variant="linen" className="hero-cta">
+                View projects
+              </CTA>
+              <CTA href="/contact" variant="outline-linen" className="hero-cta">
+                Let&apos;s chat
+              </CTA>
             </div>
+          </div>
+        </div>
+
+        {/* MARQUEE CARD — single-line, right-to-left, pinned to the very bottom
+            of the hero. Bone card with 16px (p-4) internal padding. The H1
+            "Amara Villa." now lives here, repeated as a continuous editorial
+            ticker. Decoupled from the padded overlay above so it's full-bleed. */}
+        <div className="hero-marquee-card absolute inset-x-0 bottom-0 z-10 will-change-transform">
+          <div className="bg-bone text-ink p-4 overflow-hidden">
+            <div
+              aria-hidden
+              className="flex items-center whitespace-nowrap font-bold tracking-[-0.04em] leading-none text-[clamp(2.5rem,8vw,7rem)] hero-marquee-track"
+            >
+              {/* Two passes side-by-side; the keyframe translates -50% so the
+                  loop is seamless (the second copy lands where the first started). */}
+              {[0, 1].map((pass) => (
+                <span key={pass} className="flex items-center shrink-0">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <span key={i} className="flex items-center shrink-0">
+                      <span className="px-6 md:px-10">Amara Villa.</span>
+                      <span aria-hidden className="text-olive text-[0.5em] translate-y-[-0.05em]">●</span>
+                    </span>
+                  ))}
+                </span>
+              ))}
+            </div>
+            {/* Screen-reader-only project name (the marquee above is aria-hidden) */}
+            <h1 className="sr-only">Amara Villa.</h1>
           </div>
         </div>
       </section>

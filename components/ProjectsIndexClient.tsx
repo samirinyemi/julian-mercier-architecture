@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Reveal } from "@/components/Reveal";
 import { REGIONS, type Project, type Region } from "@/lib/projects";
 import { navigateWithMorph } from "@/lib/projectMorph";
+import { getGsap, canAnimate } from "@/lib/gsap";
 
 type FilterValue = "All" | Region;
 type Mode = "flow" | "shown" | "hidden";
@@ -91,6 +92,55 @@ export function ProjectsIndexClient({ projects }: Props) {
   ) => {
     navigateWithMorph(router, href, slug, e);
   };
+
+  // Scroll parallax — each project card translates Y at its own speed as the
+  // user scrolls. Left-column cards drift gently; right-column cards drift
+  // more, creating the staggered "different-speed" feel the design calls for.
+  // Disabled on touch / coarse pointer devices and when reduced-motion is set.
+  useEffect(() => {
+    if (!canAnimate()) return;
+    if (typeof window === "undefined") return;
+    if (window.matchMedia("(max-width: 767px)").matches) return;
+
+    const { gsap, ScrollTrigger } = getGsap();
+    const cards = document.querySelectorAll<HTMLElement>(".project-parallax");
+    if (!cards.length) return;
+
+    const tweens: gsap.core.Tween[] = [];
+    cards.forEach((card) => {
+      const side = card.dataset.parallaxSide; // "left" | "right"
+      // Range of total y-translation across the trigger window.
+      // Right cards move ~1.6× more than left → parallax differential.
+      const range = side === "right" ? 90 : 55;
+      const tw = gsap.fromTo(
+        card,
+        { y: range / 2 },
+        {
+          y: -range / 2,
+          ease: "none",
+          scrollTrigger: {
+            trigger: card,
+            start: "top bottom",
+            end: "bottom top",
+            scrub: true,
+            invalidateOnRefresh: true,
+          },
+        }
+      );
+      tweens.push(tw);
+    });
+
+    // After the filter changes the grid, ScrollTrigger needs to refresh
+    // so new card positions register correctly.
+    ScrollTrigger.refresh();
+
+    return () => {
+      tweens.forEach((tw) => {
+        tw.scrollTrigger?.kill();
+        tw.kill();
+      });
+    };
+  }, [filtered.length]); // re-bind after filter changes the rendered set
 
   // Filter row content (single source of truth)
   const filterContent = (
@@ -191,7 +241,8 @@ export function ProjectsIndexClient({ projects }: Props) {
                   prefetch
                   onClick={(e) => handleCardClick(e, `/projects/${p.slug}`, p.slug)}
                   onMouseEnter={() => router.prefetch(`/projects/${p.slug}`)}
-                  className="block"
+                  className="block project-parallax will-change-transform"
+                  data-parallax-side={isLeft ? "left" : "right"}
                 >
                   <div
                     className="relative aspect-[4/5] w-full overflow-hidden bg-sage"

@@ -163,6 +163,27 @@ html.lenis body {
   }
 }
 
+/* Hero marquee — continuous right-to-left scroll. The track contains TWO
+   identical passes side-by-side; translating the track by -50% brings the
+   second copy exactly where the first started, so the loop is seamless.
+   Animation duration is generous (~32s) so the type reads as editorial,
+   never frantic. */
+@keyframes heroMarquee {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-50%, 0, 0); }
+}
+
+.hero-marquee-track {
+  animation: heroMarquee 32s linear infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-marquee-track {
+    animation: none;
+  }
+}
+
 /* SelectedWork stacked-deck — each card "reduces further" as more cards
    stack on top of it. Depth is tracked on data-stack-depth (0..3+). */
 .swk-section {
