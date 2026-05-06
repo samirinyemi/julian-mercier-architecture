@@ -13,7 +13,7 @@ type RevealProps = {
 export function Reveal({
   children,
   stagger,
-  threshold = 0.2,
+  threshold = 0.05,
   className = "",
   as = "div",
 }: RevealProps) {
@@ -22,6 +22,11 @@ export function Reveal({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    // Trigger as soon as ANY of the element starts entering the viewport,
+    // and pre-trigger 12% past the bottom so the reveal begins before the
+    // user actually reaches it — eliminates the "appearing too late" feel
+    // during smooth Lenis scroll. Negative bottom rootMargin would do the
+    // opposite (require deeper entry); positive expands the trigger zone.
     const obs = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -31,7 +36,7 @@ export function Reveal({
           }
         });
       },
-      { threshold, rootMargin: "0px 0px -10% 0px" }
+      { threshold, rootMargin: "0px 0px 12% 0px" }
     );
     obs.observe(el);
     return () => obs.disconnect();

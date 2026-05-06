@@ -14,12 +14,19 @@ import { HeroColumnReveal } from "@/components/HeroColumnReveal";
  * where the same MP4 plays end-to-end with native controls. Closes on X,
  * backdrop tap, or Escape.
  */
+// Title characters — split for letter-by-letter stagger. Spaces are
+// kept as non-breaking so inline-block spans render with width.
+const TITLE = "AMARA VILLA.";
+const TITLE_CHARS = [...TITLE];
+
 export function HeroSection() {
   const root = useRef<HTMLElement>(null);
   const fullVideoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
   const desktopVideoRef = useRef<HTMLButtonElement>(null);
+  const titleWrapperRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const [expanded, setExpanded] = useState(false);
 
   const LOOP_END_SEC = 3.0;
@@ -195,6 +202,38 @@ export function HeroSection() {
     }
   }, [expanded]);
 
+  // Auto-fit the title so it spans the full hero width edge-to-edge inside
+  // its 16px-padded card. Uses scrollWidth at a 100px baseline to compute
+  // the exact font-size that fills the container, then applies it. Re-runs
+  // on resize via ResizeObserver so it stays full-width across breakpoints.
+  useEffect(() => {
+    const wrapper = titleWrapperRef.current;
+    const title = titleRef.current;
+    if (!wrapper || !title) return;
+
+    const fit = () => {
+      const cs = getComputedStyle(wrapper);
+      const padX =
+        parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      const target = wrapper.clientWidth - padX;
+      if (target <= 0) return;
+      // Baseline measurement at a known size.
+      title.style.fontSize = "100px";
+      const natural = title.scrollWidth;
+      if (natural === 0) return;
+      title.style.fontSize = `${(100 * target) / natural}px`;
+    };
+
+    fit();
+    // Re-fit after fonts finish loading (Geist may swap from fallback).
+    if (document.fonts && "ready" in document.fonts) {
+      document.fonts.ready.then(fit).catch(() => {});
+    }
+    const ro = new ResizeObserver(fit);
+    ro.observe(wrapper);
+    return () => ro.disconnect();
+  }, []);
+
   // Entrance animations — delayed so they begin as the column reveal finishes
   useEffect(() => {
     if (!canAnimate()) return;
@@ -209,9 +248,13 @@ export function HeroSection() {
         ease: EASE.expo,
       });
 
+      // Letter-by-letter slide-up. Each character animates from yPercent:115
+      // (just below its overflow-hidden parent) up to 0 with a small stagger.
+      // Total reveal lands at ~base+stagger*chars ≈ 1.0 + 0.035*12 ≈ 1.42s,
+      // which is only slightly longer than the previous block reveal (1.1s).
       tl.from(
-        ".hero-marquee-card",
-        { yPercent: 100, opacity: 0, duration: 1.1, ease: EASE.expo },
+        ".hero-letter",
+        { yPercent: 115, duration: 1.0, stagger: 0.035, ease: EASE.expo },
         0.25
       );
 
@@ -283,7 +326,7 @@ export function HeroSection() {
           />
         </div>
 
-        <div className="absolute inset-0 flex flex-col justify-between text-linen px-4 sm:px-6 md:px-[clamp(2rem,3.2vw,3.5rem)] pb-[clamp(7rem,11vw,11rem)] pt-[clamp(5rem,8vw,9rem)]">
+        <div className="absolute inset-0 flex flex-col justify-between text-linen px-4 sm:px-6 md:px-[clamp(2rem,3.2vw,3.5rem)] pb-[clamp(8rem,18vw,21rem)] pt-[clamp(5rem,8vw,9rem)]">
           <div aria-hidden className="flex-shrink-0" />
 
           <div className="flex flex-col gap-[clamp(20px,4vw,56px)] mt-[clamp(16px,4vw,72px)] hero-fade">
@@ -378,32 +421,33 @@ export function HeroSection() {
           </div>
         </div>
 
-        {/* MARQUEE CARD — single-line, right-to-left, pinned to the very bottom
-            of the hero. Bone card with 16px (p-4) internal padding. The H1
-            "Amara Villa." now lives here, repeated as a continuous editorial
-            ticker. Decoupled from the padded overlay above so it's full-bleed. */}
-        <div className="hero-marquee-card absolute inset-x-0 bottom-0 z-10 will-change-transform">
-          <div className="bg-bone text-ink p-4 overflow-hidden">
-            <div
-              aria-hidden
-              className="flex items-center whitespace-nowrap font-bold tracking-[-0.04em] leading-none text-[clamp(2.5rem,8vw,7rem)] hero-marquee-track"
-            >
-              {/* Two passes side-by-side; the keyframe translates -50% so the
-                  loop is seamless (the second copy lands where the first started). */}
-              {[0, 1].map((pass) => (
-                <span key={pass} className="flex items-center shrink-0">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <span key={i} className="flex items-center shrink-0">
-                      <span className="px-6 md:px-10">Amara Villa.</span>
-                      <span aria-hidden className="text-olive text-[0.5em] translate-y-[-0.05em]">●</span>
-                    </span>
-                  ))}
+        {/* Full-width, single-line, uppercase H1 — pinned to the very bottom
+            of the hero with 16px (p-4) breathing room on all sides. Font-size
+            is computed in JS to fill the container exactly (auto-fit), so the
+            text always spans edge-to-edge regardless of viewport. Each letter
+            animates up from below its overflow-hidden parent for a per-char
+            slide-up reveal. */}
+        <div
+          ref={titleWrapperRef}
+          className="absolute inset-x-0 bottom-0 z-10 p-4"
+        >
+          <h1
+            ref={titleRef}
+            className="font-bold leading-[0.9] tracking-[-0.045em] uppercase text-linen whitespace-nowrap"
+            aria-label="Amara Villa."
+          >
+            <span className="overflow-hidden block pb-[0.06em]">
+              {TITLE_CHARS.map((ch, i) => (
+                <span
+                  key={i}
+                  aria-hidden
+                  className="hero-letter inline-block will-change-transform"
+                >
+                  {ch === " " ? " " : ch}
                 </span>
               ))}
-            </div>
-            {/* Screen-reader-only project name (the marquee above is aria-hidden) */}
-            <h1 className="sr-only">Amara Villa.</h1>
-          </div>
+            </span>
+          </h1>
         </div>
       </section>
 

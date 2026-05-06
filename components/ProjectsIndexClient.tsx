@@ -110,19 +110,24 @@ export function ProjectsIndexClient({ projects }: Props) {
     cards.forEach((card) => {
       const side = card.dataset.parallaxSide; // "left" | "right"
       // Range of total y-translation across the trigger window.
-      // Right cards move ~1.6× more than left → parallax differential.
-      const range = side === "right" ? 90 : 55;
+      // Right cards move ~1.6× more than left → visible parallax differential
+      // between the two columns. Bumped from earlier so the effect is clearly
+      // perceptible during smooth-scroll, not just a subtle drift.
+      const range = side === "right" ? 140 : 80;
       const tw = gsap.fromTo(
         card,
         { y: range / 2 },
         {
           y: -range / 2,
           ease: "none",
+          // 0.6s smoothing on the scrub takes the edge off any micro-jitter
+          // from the Lenis ↔ ScrollTrigger sync, while staying tight to the
+          // user's actual scroll position.
           scrollTrigger: {
             trigger: card,
             start: "top bottom",
             end: "bottom top",
-            scrub: true,
+            scrub: 0.6,
             invalidateOnRefresh: true,
           },
         }
@@ -130,9 +135,10 @@ export function ProjectsIndexClient({ projects }: Props) {
       tweens.push(tw);
     });
 
-    // After the filter changes the grid, ScrollTrigger needs to refresh
-    // so new card positions register correctly.
-    ScrollTrigger.refresh();
+    // After the filter changes the grid (or on initial mount), let the layout
+    // settle for one frame before refreshing — ScrollTrigger reads positions
+    // from the DOM, and reading them too early returns stale values.
+    requestAnimationFrame(() => ScrollTrigger.refresh());
 
     return () => {
       tweens.forEach((tw) => {

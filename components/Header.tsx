@@ -7,6 +7,16 @@ import { usePathname } from "next/navigation";
 import { MobileMenu } from "@/components/MobileMenu";
 import { scrollToHero } from "@/lib/scrollToHero";
 
+// Nav links shown across the header at the very top of the page (before any
+// scroll). Once the user scrolls, these fade out and the hamburger takes
+// over.
+const NAV_LINKS = [
+  { href: "/studio", label: "Studio" },
+  { href: "/projects", label: "Projects" },
+  { href: "/journal", label: "Journal" },
+  { href: "/contact", label: "Contact" },
+] as const;
+
 export function Header() {
   const [scrollY, setScrollY] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
@@ -16,6 +26,13 @@ export function Header() {
   const [origin, setOrigin] = useState<{ x: number; y: number } | undefined>();
   const lastScrollRef = useRef(0);
   const pathname = usePathname();
+
+  // True only at the very top of the page. Drives the cross-fade between
+  // the inline nav links and the hamburger.
+  const isAtTop = scrollY < 6;
+  // On every page except home, jump straight to hamburger mode — the inline
+  // nav only makes sense above the home hero.
+  const showInlineNav = isAtTop && pathname === "/";
 
   // Logo click: smooth-scroll to top of home, regardless of current page.
   // If already on /, prevent the no-op nav so the scroll animation runs cleanly.
@@ -109,8 +126,30 @@ export function Header() {
             </span>
           </div>
 
-          {/* Hamburger — present on every viewport, every page */}
-          <div className="col-span-6 md:col-span-4 flex items-center justify-end">
+          {/* Right cluster — inline nav links (at top of home) cross-fade
+              with the hamburger. Hamburger always visible on mobile. */}
+          <div className="col-span-6 md:col-span-4 flex items-center justify-end gap-6 md:gap-8">
+            {/* Inline nav — fades in only at the very top of the home page,
+                fades out (with pointer-events disabled) once the user scrolls. */}
+            <nav
+              aria-hidden={!showInlineNav}
+              className={`hidden lg:flex items-center gap-7 xl:gap-9 font-mono text-[11px] tracking-[0.18em] uppercase transition-opacity duration-300 ease-out ${
+                showInlineNav
+                  ? "opacity-100 pointer-events-auto"
+                  : "opacity-0 pointer-events-none"
+              }`}
+            >
+              {NAV_LINKS.map((l) => (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  className="text-linen hover:text-linen/60 transition-colors duration-200"
+                >
+                  {l.label}
+                </Link>
+              ))}
+            </nav>
+
             <button
               ref={burgerRef}
               type="button"
@@ -118,15 +157,26 @@ export function Header() {
               aria-expanded={menuOpen}
               aria-controls="site-menu"
               onClick={toggleMenu}
-              className="relative inline-flex items-center justify-center w-11 h-11 md:w-12 md:h-12 -mr-2 group"
+              aria-hidden={showInlineNav && !menuOpen}
+              className={`relative inline-flex items-center justify-center w-11 h-11 md:w-12 md:h-12 -mr-2 cursor-pointer group transition-opacity duration-300 ease-out ${
+                showInlineNav
+                  ? "lg:opacity-0 lg:pointer-events-none"
+                  : "opacity-100"
+              }`}
             >
               <span className="sr-only">{menuOpen ? "Close" : "Menu"}</span>
+              {/* Subtle hover ring so the affordance is visible even when
+                  the bars themselves are static. */}
+              <span
+                aria-hidden
+                className="absolute inset-1 rounded-full bg-linen/0 group-hover:bg-linen/10 transition-colors duration-300"
+              />
               <span
                 aria-hidden
                 className={`absolute h-[1.5px] w-6 md:w-7 bg-linen transition-all duration-500 ease-out ${
                   menuOpen
                     ? "rotate-45 translate-y-0"
-                    : "-translate-y-[5px]"
+                    : "-translate-y-[5px] group-hover:-translate-y-[6px]"
                 }`}
               />
               <span
@@ -140,7 +190,7 @@ export function Header() {
                 className={`absolute h-[1.5px] w-6 md:w-7 bg-linen transition-all duration-500 ease-out ${
                   menuOpen
                     ? "-rotate-45 translate-y-0"
-                    : "translate-y-[5px]"
+                    : "translate-y-[5px] group-hover:translate-y-[6px]"
                 }`}
               />
             </button>
