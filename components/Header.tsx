@@ -127,8 +127,12 @@ export function Header() {
           </div>
 
           {/* Right cluster — inline nav links (at top of home) cross-fade
-              with the hamburger. Hamburger always visible on mobile. */}
-          <div className="col-span-6 md:col-span-4 flex items-center justify-end gap-6 md:gap-8">
+              with the hamburger. Hamburger always visible on mobile.
+              `relative` so the absolutely-positioned hamburger overlays
+              this cluster instead of consuming a flex slot — that lets the
+              nav links extend flush to the cluster's right edge (= page's
+              right padding line) when the hamburger is hidden. */}
+          <div className="col-span-6 md:col-span-4 relative flex items-center justify-end gap-6 md:gap-8">
             {/* Inline nav — fades in only at the very top of the home page,
                 fades out (with pointer-events disabled) once the user scrolls. */}
             <nav
@@ -158,7 +162,7 @@ export function Header() {
               aria-controls="site-menu"
               onClick={toggleMenu}
               aria-hidden={showInlineNav && !menuOpen}
-              className={`relative inline-flex items-center justify-center w-11 h-11 md:w-12 md:h-12 -mr-2 cursor-pointer group transition-opacity duration-300 ease-out ${
+              className={`absolute right-[-8px] top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-11 h-11 md:w-12 md:h-12 cursor-pointer group transition-opacity duration-300 ease-out ${
                 showInlineNav
                   ? "lg:opacity-0 lg:pointer-events-none"
                   : "opacity-100"
