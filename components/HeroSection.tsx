@@ -471,7 +471,7 @@ export function HeroSection() {
             slide-up reveal. */}
         <div
           ref={titleWrapperRef}
-          className="absolute inset-x-0 bottom-0 z-10 p-4"
+          className="absolute inset-x-0 bottom-0 z-10 px-4 pt-4 pb-[26px]"
         >
           <h1
             ref={titleRef}
